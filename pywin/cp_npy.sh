@@ -1,0 +1,17 @@
+cp Wo.npy /pyboard
+cp W_out.npy /pyboard
+cp Wi.npy /pyboard
+cp Wf.npy /pyboard
+cp Wc.npy /pyboard
+cp Uc.npy /pyboard
+cp Uf.npy /pyboard
+cp Ui.npy /pyboard
+cp Uo.npy /pyboard
+cp bo.npy /pyboard
+cp b_out.npy /pyboard
+cp bi.npy /pyboard
+cp hoodden_size.npy /pyboard
+cp hidden_size.npy /pyboard
+cp input_dim.npy /pyboard
+cp num_features.npy /pyboard
+cp seq_length.npy /pyboard
