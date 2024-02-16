@@ -1,82 +1,220 @@
-import machine
+import global_value as g
+from DFPlayer import DFPlayer
+
+g.dfplayer = DFPlayer()
+g.dfplayer.vol = 20
+g.dfplayer.buff = 0
+g.dfplayer.play(9999)
+
+
+import gc
+import time
 import utime
+import ntptime
+from time import sleep
+import machine
+from memory_usage import free
+from key_triger import input_with_timeout as input
+from TouchSensor import TouchSensor
+from wifi import wifi
+from MPU6050 import MPU6050
+from ulab import numpy as np
+from LSTM_np import LSTM
+from l_chika import l_chika
+from multi_thread import ThreadManager
+from DataManager import DataManager
 
-pin_btn = machine.Pin(16, machine.Pin.IN, machine.Pin.PULL_UP)
-uart = machine.UART(1, baudrate=9600, tx=machine.Pin(4), rx=machine.Pin(5))
-led = machine.Pin("LED", machine.Pin.OUT)
+g.dfplayer.play(9998)
 
-ON  = 0 # LOW
-OFF = 1 # HIGH
 
-btn = OFF
-prev_btn = OFF
+class Phase:
+    def __init__(self):
+        try:
+            g.spcial_mode
+        except AttributeError:
+            g.spcial_mode = False
+        print(self.__class__.__name__, "init")
+        gc.mem_free()
 
-# DFPlayer シリアル通信データフォーマット (以下、各1byte)
-#  1. スタートバイト (0x7E固定)
-#  2. バージョン情報 (0xFF固定で良い)
-#  3. データ長 (スタートバイト、チェックサム(上位、下位)、エンドバイトを除くので、ほぼ0x06固定)
-#  4. コマンド (よく使うものは、0x06:ボリューム指定(0〜30)、0x12: "mp3"フォルダ内の曲番号指定再生、0x0E:曲停止)
-#  5. フィードバック (0x00:フィードバック不要、0x01:フィードバック必要)
-#  6. パラメータ１ (2byteの上位)
-#  7. パラメータ２ (2byteの下位)
-#  8. チェックサム1 (2byteの上位)
-#  9. チェックサム2 (2byteの下位)
-# 10. エンドバイト (0xEF固定)
-# ※ 8,9のチェックサムは、0 - (2.〜7.の和)で算出されるマイナス値の2byteの2の補数表現
-# 例) [7E, FF, 06, 09, 00, 00, 04, FE, EE, EF]のとき、チェックサムの[FE, EE]の部分は以下のように計算される。
-#     [FF, 06, 09, 00, 00, 04]の合算値が274なので、チェックサムの値は 0 - 274 = -274。
-#     274は2進数表現だと 0000 0001 0001 0010 なので、反転させると 1111 1110 1110 1101 (=1の補数)
-#     2の補数はこれに1を加えるので 1111 1110 1110 1110 = 0xFEEE となる。
+    def process(self):
+        print("Base class for all Phases.")
 
-def calc_checksum(sum_data):
-    temp = ~sum_data + 1 # 2の補数の計算(ビットを反転させて1を足す)
-    h_byte = (temp & 0xFF00) >> 8
-    l_byte = temp & 0x00FF
-    return h_byte, l_byte
 
-def send_data(command, param):
-    ver      = 0xFF
-    d_len    = 0x06
-    feedback = 0x00
-    param1  = (param & 0xFF00) >> 8
-    param2  = param & 0x00FF
-    cs1, cs2 = calc_checksum(ver + d_len + command + feedback + param1 + param2)
-    sdata = bytearray([0x7E, ver, d_len, command, feedback, param1, param2, cs1, cs2, 0xEF])
-    uart.write(sdata)
-    #print(sdata)
+class Phase1(Phase):
+    def __init__(self):
+        g.spcial_mode = False
+        super().__init__()
+        g.TouchSensor.ON()
 
-def init_sd():
-    send_data(0x3F, 0x02) # 0x02でSDカードのみ有効化
-    utime.sleep_ms(1000)
+    def process(self):
+        pass
 
-def set_volume(volume):
-    send_data(0x06, volume)
-    utime.sleep_ms(500)
 
-def play_sound(num):
-    # "mp3"という名称のフォルダ内に保存された、"0001.mp3"のような名称のファイルを再生
-    print("Play {}".format(num))
-    send_data(0x12, num)
-    utime.sleep_ms(500)
+class Phase2(Phase):
+    def __init__(self):
+        super().__init__()
+        self.use_special_mode(8000)
+        pass
 
-###################################
+    def process(self):
+        print("Phase2 processing")
+        while g.TouchSensor.is_touched():
+            print("..")
+            time.sleep(0.1)
 
-init_sd()
-print("Ready.")
-set_volume(30)
+        g.next_Phase = 3
 
-num= 0
+    def use_special_mode(self, limit_ms=20000):
+        try:
+            g.start_time
+            g.spcial_mode
+        except AttributeError:
+            g.start_time = utime.ticks_ms()
+            g.spcial_mode = True
+            print("********Special mode start!********")
+        self.limit_ms = limit_ms
+        try:
+            if not g.timer:
+                self.init_timer()
+        except AttributeError:
+            self.init_timer()
 
-while True:
-    btn = pin_btn.value()
+    def init_timer(self):  # timerの初期化を行うメソッドを追加
+        g.timer = machine.Timer()
+        g.timer.init(
+            mode=machine.Timer.ONE_SHOT,
+            period=self.limit_ms,
+            callback=self.timer_handler,
+        )
 
-    if prev_btn == OFF and btn == ON:
-        num += 1
-        if num >= 3:
-            num = 1
-        play_sound(num)
+    def timer_handler(self, timer):
+        print("********Special mode finished!********")
+        g.spcial_mode = False
+        g.timer = None
 
-    prev_btn = btn
-    led.on()
-    utime.sleep_ms(1)
-    led.off()
+
+class Phase3(Phase):
+    def __init__(self):
+        super().__init__()
+        g.TouchSensor.OFF()
+
+    def process(self):
+        print("Phase3の処理を実行します.")
+        time.sleep(2)
+        g.play_day.play_day()
+        g.next_Phase = 1
+
+
+class StateMachine:
+    def __init__(self):
+        self.Phase_objects = {
+            1: Phase1,
+            2: Phase2,
+            3: Phase3,
+        }
+        g.current_Phase = 1
+        g.switch_prev = machine.Pin(1).value()
+        g.switch = g.switch_prev
+        g.TouchSensor = TouchSensor()
+        g.TouchSensor.limit_ms = 2000
+
+    def get_key(self):
+        key = input(0.01)
+        return key
+
+    def change_Phase(self, next_Phase):
+        if 1 <= next_Phase <= 3:
+            print("Phaseが変更されました:", next_Phase)
+            g.current_Phase = next_Phase
+        else:
+            print("無効な数字です。1から3の範囲で入力してください。")
+
+    def run(self):
+        print("initial Phase:", g.current_Phase)
+        while True:
+            key = self.get_key()
+            if key.isdigit():
+                g.next_Phase = int(key)
+            if g.TouchSensor.is_touched():
+                g.next_Phase = 2
+
+            try:
+                if g.next_Phase != g.current_Phase:
+                    self.change_Phase(g.next_Phase)
+            except Exception:
+                pass
+
+            # 現在のPhaseに対応する処理を実行
+            current_Phase = self.Phase_objects[g.current_Phase]()
+            current_Phase.process()
+
+
+class play_day:
+    def __init__(self, train=True):
+        g.rtc = machine.RTC()
+        self.time_init()
+
+    def play_day(self):
+        for i in range(4):
+            if i > 1:
+                j = i + 2
+            else:
+                j = i + 1
+            g.dfplayer.play(100 * (3 - i) + g.rtc.datetime()[j])
+
+    def time_init(self):
+        now = ntptime.get_now()
+        if now:
+            value_to_move = now[6]
+            new_tuple = now[:6] + now[7:]
+            new_tuple = new_tuple[:3] + (value_to_move,) + new_tuple[3:]
+            g.rtc.datetime(new_tuple)
+
+    def date_time(self):
+        return machine.RTC().datetime()
+
+
+class Main:
+    def __init__(self, train=True):
+        self.train = train
+        self.state_machine = StateMachine()
+        g.dfplayer = DFPlayer()
+        g.dfplayer.vol = 30
+        g.wifi = wifi()
+        g.wifi.ssid = "your ssid"
+        g.wifi.password = "your password"
+
+        g.wifi.port = 1205
+        g.wifi.server_init()
+        if g.wifi.connected == True:
+            g.dfplayer.play(1000)
+        else:
+            g.dfplayer.play(9900)
+            time.sleep(4)
+            machine.reset()
+        g.play_day = play_day()
+
+        if self.train:
+            g.wifi.find_client()
+        l_chika(blink=0.01)
+        self.data_manager = DataManager(train=True)
+
+        pass
+
+    def run(self):
+        if self.train:
+            self.state_machine.run()
+
+
+#             g.wifi.disconnect()
+#             time.sleep(2)
+#
+#
+
+#             g.wifi.find_client()
+#             g.wifi.send(str(ntptime.time()))
+
+if __name__ == "__main__":
+    l_chika(blink=0.01)
+    main = Main()
+    main.run()

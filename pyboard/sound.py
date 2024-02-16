@@ -1,141 +1,67 @@
 import machine
- 
-import time
+import utime
 
+class DFPlayer:
+    def __init__(self, uart_port=1, tx_pin=4, rx_pin=5, pin_btn=16, led_pin="LED"):
+        self.uart = machine.UART(uart_port, baudrate=9600, tx=machine.Pin(tx_pin), rx=machine.Pin(rx_pin))
+        self.pin_btn = machine.Pin(pin_btn, machine.Pin.IN, machine.Pin.PULL_UP)
+        self.led = machine.Pin(led_pin, machine.Pin.OUT)
 
-uart = machine.UART(1,baudrate=9600,tx = machine.Pin(4),rx = machine.Pin(5))
+        self.ON  = 0 # LOW
+        self.OFF = 1 # HIGH
 
- 
-#タクトスィッチ
-# green_button = machine.Pin(10, machine.Pin.IN, machine.Pin.PULL_UP)
-# yellow_button = machine.Pin(14, machine.Pin.IN, machine.Pin.PULL_UP)
-# red_button = machine.Pin(17, machine.Pin.IN, machine.Pin.PULL_UP)
-# blue_button = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)
+        self.btn = self.OFF
+        self.prev_btn = self.OFF
 
+    def calc_checksum(self, sum_data):
+        temp = ~sum_data + 1
+        h_byte = (temp & 0xFF00) >> 8
+        l_byte = temp & 0x00FF
+        return h_byte, l_byte
 
+    def send_data(self, command, param):
+        ver      = 0xFF
+        d_len    = 0x06
+        feedback = 0x00
+        param1   = (param & 0xFF00) >> 8
+        param2   = param & 0x00FF
+        cs1, cs2 = self.calc_checksum(ver + d_len + command + feedback + param1 + param2)
+        sdata = bytearray([0x7E, ver, d_len, command, feedback, param1, param2, cs1, cs2, 0xEF])
+        self.uart.write(sdata)
 
-# LEDー光らせてみました、それだけ
-led = machine.Pin("LED", machine.Pin.OUT)
- 
-# スィッチ１回だけ反応するためのフラグ
-B = 0
+    def init_sd(self):
+        self.send_data(0x3F, 0x02)
+        utime.sleep_ms(1000)
 
-# トグルスィッチ（赤）用のフラグ
-T = 0
+    def set_volume(self, volume):
+        self.send_data(0x06, volume)
+        utime.sleep_ms(500)
 
-# def chk_buttonState():
-#     #global pressed_button
-#     pressed_button = -1
-#     
-#     green_b = green_button.value()
-#     yellow_b = yellow_button.value()
-#     red_b = red_button.value()
-#     blue_b = blue_button.value()
-#     
-#     if not green_b:
-#         pressed_button = 10
-#     
-#     if not yellow_b:
-#         pressed_button = 14
-# 
-#     if not red_b:
-#         pressed_button = 17
-# 
-#     if not blue_b:
-#         pressed_button = 21
-# 
-#     return pressed_button
-# 
+    def play_sound(self, num, vol=30):
+        self.set_volume(vol)
+        print("Play {}".format(num))
+        self.send_data(0x12, num)
+        utime.sleep_ms(500)
 
-def calc_checksum(sum_data):
-    temp = ~sum_data + 1
-    h_byte = (temp & 0xFF00) >> 8
-    l_byte = temp & 0x00FF
-    return h_byte, l_byte
+    def run(self):
+        self.init_sd()
+        print("Ready.")
 
-def send_data(command, param):
-    ver      = 0xFF
-    d_len    = 0x06
-    feedback = 0x00
-    param1  = (param & 0xFF00) >> 8
-    param2  = param & 0x00FF
-    cs1, cs2 = calc_checksum(ver + d_len + command + feedback + param1 + param2)
-    sdata = bytearray([0x7E, ver, d_len, command, feedback, param1, param2, cs1, cs2, 0xEF])
-    uart.write(sdata)
-    #print(sdata)
+        num = 0
+        while True:
+            self.btn = self.pin_btn.value()
 
-def play_sound(num):
-    global T
-    T = 0
-     
-    send_data(0x12, num)
-    #utime.sleep_ms(500)
-    
+            if self.prev_btn == self.OFF and self.btn == self.ON:
+                num += 1
+                if num >= 3:
+                    num = 1
+                self.play_sound(num)
 
-def pause_and_play():
-    global T
-    
-    if T == 0:
-        send_data(0x0E, 0)
-        T = 1
-    elif T == 1:
-        send_data(0x0D, 0)
-        T = 0
-    
-    #utime.sleep_ms(500)
+            self.prev_btn = self.btn
+            self.led.on()
+            utime.sleep_ms(1)
+            self.led.off()
 
-def next_sound():
-    global T
-    T = 0
-    
-    send_data(0x01, 0)
-    
-    
-def prev_sound():
-    global T
-    T = 0
-    
-    send_data(0x02, 0)
-    
-
-while True:
-    try:
-
-        btnState = 10
-
-        if btnState != -1:
-            led.value(0)
-            B = B + 1
-        else:
-            led.value(0)
-            B = 0
-
-        if B == 1:
-            print(btnState)
-            #when any button pressed , do job just once
-            if btnState == 10:
-                #green
-                play_sound(1)
-                
-                
-            elif btnState == 14:
-                #Yellow
-                prev_sound()
-                
-            elif btnState == 17:
-                #Red
-                pause_and_play()
-                
-                
-            elif btnState == 21:
-                #Blue
-                next_sound()
-                
-                
-            else:
-                pass
-            
-        time.sleep(3)# wait
-        led.value(0)
-    except KeyboardInterrupt:
-        break
+if __name__ == "__main__":
+    dfplayer = DFPlayer()
+    dfplayer.run()

@@ -1,0 +1,53 @@
+try:
+    import numpy as np
+except ImportError:
+    from ulab import numpy as np
+    pass
+
+from manualLSTM import manualLSTM
+
+try:
+    from numpy import random
+except ImportError:
+    import random
+    pass
+
+from manualLSTM import manualLSTM
+
+# hidden_size = np.load('hidden_size.npy')
+Wi = np.load('Wi.npy')
+Ui = np.load('Ui.npy')
+bi = np.load('bi.npy')
+Wc = np.load('Wc.npy')
+Uc = np.load('Uc.npy')
+bc = np.load('bc.npy')
+Wf = np.load('Wf.npy')
+Uf = np.load('Uf.npy')
+bf = np.load('bf.npy')
+Wo = np.load('Wo.npy')
+Uo = np.load('Uo.npy')
+bo = np.load('bo.npy')
+W_out = np.load('W_out.npy')
+b_out = np.load('b_out.npy')
+
+hidden_size = 64
+input_dim = 6 #np.load('input_dim.npy')
+seq_length = 30 # np.load('seq_length.npy')
+num_features = 4 #np.load('num_features.npy')
+
+lstm_instance = manualLSTM(Wi, Ui, bi, Wc, Uc, bc, Wf, Uf, bf, Wo, Uo, bo, W_out, b_out)
+
+
+# 6x30の行列を生成する関数
+def generate_random_matrix(rows, cols):
+    matrix = [[random.random() for _ in range(cols)] for _ in range(rows)]
+    return matrix
+
+# 6x30のランダムな行列を生成
+X_test = np.array(generate_random_matrix(40, 6))
+y = np.array(range(num_features))
+
+y_hat = lstm_instance.forward(X_test)
+label = np.argmax(y_hat, axis=1)
+print(y_hat)
+print('TEST DATA CORRECT LABEL: ',y,'\n ONLY NUMPY CLUSSTERING: ',label)

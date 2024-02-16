@@ -1,0 +1,12 @@
+try:
+    import numpy as np
+except ImportError:
+    from ulab import numpy as np
+    pass
+
+arr = np.array([[1,2,3],[4,5,6]])
+
+try:
+    arr2 = np.array(arr[:,1,:])
+except IndexError or TypeError:
+    arr2 = np.array(arr[1,:])

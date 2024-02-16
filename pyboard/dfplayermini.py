@@ -98,4 +98,3 @@ class Player:
         self.cmd(0x0B)
 
     def module_reset(self):
-        self.cmd(0x0C)

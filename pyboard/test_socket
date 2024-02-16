@@ -1,0 +1,13 @@
+import socket
+
+s = socket.socket()
+host = socket.gethostname()
+port = 1717
+s.bind(("", port))
+
+s.listen(5)
+while True:
+    c, addr = s.accept()
+    print("Got connection ", addr)
+    c.send("The Meeting is at 10 am")
+    c.close()
