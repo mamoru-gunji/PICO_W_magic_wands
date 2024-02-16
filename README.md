@@ -21,3 +21,8 @@ LSTM: tf.keras -> only numpy (for micropython)
 ## Usage
 
 To be developed
+
+## Learned model
+![confusion_matrix](image/confusion_matrix.png)
+![Loss](image/Loss.png)
+![Accuracy](image/Accuracy.png)
